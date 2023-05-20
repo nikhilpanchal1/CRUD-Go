@@ -1,26 +1,29 @@
-package model
+package models
 
 import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type Item struct {
-	ID    string  `json:"id"`
-	Name  string  `json:"name"`
-	Price float64 `json:"price"`
+	gorm.Model
+	ID    uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4()" json:"id"`
+	Name  string    `json:"name"`
+	Price float64   `json:"price"`
 }
 
 type User struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
-	Password string `json:"-"`
+	gorm.Model
+	ID       uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4()" json:"id"`
+	Username string    `json:"username"`
+	Password string    `json:"-"`
 }
 
 // New item with auto gen id
 func NewItem(name string, price float64) *Item {
 	return &Item{
-		ID:    uuid.New().String(), //there is an alternative os/exec that can be used for the same. https://www.geeksforgeeks.org/generate-uuid-in-golang/#
+		ID:    uuid.New(), //there is an alternative os/exec that can be used for the same. https://www.geeksforgeeks.org/generate-uuid-in-golang/#
 		Name:  name,
 		Price: price,
 	}
@@ -34,7 +37,7 @@ func NewUser(username, password string) (*User, error) {
 	}
 
 	return &User{
-		ID:       uuid.New().String(),
+		ID:       uuid.New(),
 		Username: username,
 		Password: string(hashedPassword),
 	}, nil
