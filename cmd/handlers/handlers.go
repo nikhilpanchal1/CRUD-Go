@@ -10,7 +10,7 @@ func Home(c *fiber.Ctx) error {
 	return c.SendString("Hello, ROUTEEEEEEEES!")
 }
 
-func GetItems(c *fiber.Ctx) error {
+func GetItem(c *fiber.Ctx) error {
 	// Logic to fetch all items from database
 	items := []models.Item{}
 
@@ -18,10 +18,6 @@ func GetItems(c *fiber.Ctx) error {
 	return c.Status(200).JSON(items)
 }
 
-func GetItem(c *fiber.Ctx) error {
-	// Logic to fetch items from database
-	return nil
-}
 func AddItem(c *fiber.Ctx) error {
 	// Logic to add a new item
 	item := new(models.Item)
@@ -37,7 +33,24 @@ func AddItem(c *fiber.Ctx) error {
 
 func DeleteItem(c *fiber.Ctx) error {
 	// Logic to delete an item
-	return nil
+	itemId := c.Params("ID") //?NOTE: Need to change id
+	//check if item exists in database
+	result := database.DB.Db.Find(&models.Item{}, c.Params(itemId))
+
+	if result.RowsAffected == 0 {
+		return c.Status(fiber.StatusNotFound).JSON(c.Status(200))
+	} else if result.Error != nil {
+		return c.Status(fiber.StatusBadGateway).JSON(c.Status(404).JSON(fiber.Map{"status": "fail", "message": result.Error.Error()}))
+	}
+	//if item exists, delete it
+	database.DB.Db.Delete(&models.Item{}, "id = ?", itemId)
+	//if item does not exist, return error
+	if database.DB.Db.Error != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": database.DB.Db.Error.Error(),
+		})
+	}
+	return c.SendString("Item deleted")
 }
 
 func Login(c *fiber.Ctx) error {

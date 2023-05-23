@@ -8,7 +8,6 @@ import (
 	"example.com/go-fiber-api/cmd/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 type Dbinstance struct {
@@ -23,16 +22,18 @@ func ConnectDb() {
 		os.Getenv("DB_PASSWORD"),
 		os.Getenv("DB_NAME"),
 	)
+
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		//Logger: logger.Default.LogMode(logger.Info), //!NOTE: Enable this to log performance, you have to import logger for this as well.
 	})
+
 	if err != nil {
 		log.Fatal("Failed to connect to db. \n", err)
 		os.Exit(2)
 	}
 
 	log.Println("Connected to db")
-	db.Logger = logger.Default.LogMode(logger.Info)
+	//db.Logger = logger.Default.LogMode(logger.Info)
 
 	// Enable UUID extension
 	err = db.Exec("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";").Error

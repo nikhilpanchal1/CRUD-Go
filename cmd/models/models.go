@@ -6,9 +6,10 @@ import (
 	"gorm.io/gorm"
 )
 
+// TODO: gorm:"primaryKey" || and check if it works with uuid. Might be losing performance there
 type Item struct {
 	gorm.Model
-	ID    uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4()" json:"ID"`
+	ID    uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4()" json:"ID"` //gorm:"type:uuid;default:uuid_generate_v4()" json:"id
 	Name  string    `json:"name"`
 	Price float64   `json:"price"`
 }
@@ -17,7 +18,7 @@ type User struct {
 	gorm.Model
 	ID       uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4()" json:"ID"` //uuid.UUID `gorm:"type:uuid;default:uuid_generate_v4()" json:"id"`
 	Username string    `json:"username"`
-	Password string    `json:"-"`
+	Password string    `json:"password"`
 }
 
 // New item with auto gen id
