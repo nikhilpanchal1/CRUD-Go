@@ -21,6 +21,12 @@ type User struct {
 	Password string    `json:"password"`
 }
 
+type Token struct {
+	gorm.Model
+	UserID uuid.UUID `json:"user_id"`
+	Token  string    `json:"token"`
+}
+
 // New item with auto gen id
 func NewItem(name string, price float64) *Item {
 	return &Item{

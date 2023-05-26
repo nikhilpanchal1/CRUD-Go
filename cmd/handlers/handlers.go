@@ -100,6 +100,11 @@ func Login(c *fiber.Ctx) error {
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
+	// Save the token in the database
+	database.DB.Db.Create(&models.Token{
+		UserID: user.ID,
+		Token:  t,
+	})
 
 	return c.JSON(fiber.Map{"token": t})
 }
@@ -136,4 +141,40 @@ func GetUsers(c *fiber.Ctx) error {
 
 	database.DB.Db.Find(&users)
 	return c.Status(200).JSON(users)
+}
+
+func DeleteUser(c *fiber.Ctx) error {
+	// Logic to delete an item
+	userId := c.Params("ID")                                          //?NOTE: Need to change id
+	result := database.DB.Db.Delete(&models.User{}, "ID = ?", userId) //
+
+	//if its not found, send status 404
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+
+	//Assuming no errors send status 200
+	return c.SendStatus(fiber.StatusOK)
+}
+
+func GetLoggedInUsers(c *fiber.Ctx) error {
+	// Query the tokens table to get all active tokens
+	tokens := []models.Token{}
+	database.DB.Db.Find(&tokens)
+
+	// For each token, find the corresponding user and add them to a list
+	users := []models.User{}
+	for _, token := range tokens {
+		user := models.User{}
+		database.DB.Db.Where("ID = ?", token.UserID).First(&user)
+		users = append(users, user)
+	}
+
+	return c.Status(200).JSON(users)
+}
+
+func LogoutAllUsers(c *fiber.Ctx) error {
+	// Delete all tokens from the database
+	database.DB.Db.Exec("DELETE FROM tokens")
+	return c.SendString("All users logged out")
 }
