@@ -24,6 +24,17 @@ func GetItem(c *fiber.Ctx) error {
 	return c.Status(200).JSON(items)
 }
 
+// method that gets item by id
+func GetItemById(c *fiber.Ctx) error {
+	itemId := c.Params("ID")
+
+	result := database.DB.Db.First(&models.Item{}, "ID = ?", itemId)
+	if result.Error != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+	return c.Status(200).JSON(result)
+}
+
 func AddItem(c *fiber.Ctx) error {
 	// Logic to add a new item
 	item := new(models.Item)
