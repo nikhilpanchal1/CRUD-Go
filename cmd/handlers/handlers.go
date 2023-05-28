@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"time"
 
 	"example.com/go-fiber-api/cmd/models"
 	"example.com/go-fiber-api/database"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/go-redis/redis/v8"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -16,27 +19,102 @@ func Home(c *fiber.Ctx) error {
 	return c.SendString("Hello, ROUTEEEEEEEES!")
 }
 
-func GetItem(c *fiber.Ctx) error {
-	// Logic to fetch all items from database
-	items := []models.Item{}
+var (
+	ctx = context.Background()
+	rdb = redis.NewClient(&redis.Options{
+		Addr:     os.Getenv("REDIS_ADDR"), // Redis server address
+		Password: "",                      // os.Getenv("DB_PASSWORD"), // redis password
+		DB:       0,                       // convert string to int: strconv.Atoi(os.Getenv("DB_NUMBER")), // database number
+	})
+)
 
-	database.DB.Db.Find(&items)
-	return c.Status(200).JSON(items)
-}
-
-// method that gets item by id
 func GetItemById(c *fiber.Ctx) error {
 	itemId := c.Params("ID")
 
-	result := database.DB.Db.First(&models.Item{}, "ID = ?", itemId)
-	if result.Error != nil {
-		return c.SendStatus(fiber.StatusNotFound)
+	// Try Redis cache first
+	cacheVal, err := rdb.Get(ctx, "item:"+itemId).Result()
+
+	// If cache entry exists
+	if err == nil {
+		var item models.Item
+		err := json.Unmarshal([]byte(cacheVal), &item)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+		return c.Status(200).JSON(item)
+	} else if err == redis.Nil {
+		// Cache entry doesnt exist fetching from database
+		result := database.DB.Db.First(&models.Item{}, "ID = ?", itemId)
+		if result.Error != nil {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+
+		// Saving to redis
+		itemJson, err := json.Marshal(result)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+		err = rdb.Set(ctx, "item:"+itemId, itemJson, 0).Err() // 0 means no expiration
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+		return c.Status(200).JSON(result)
+	} else {
+		// Redis error
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": err.Error(),
+		})
 	}
-	return c.Status(200).JSON(result)
+}
+
+func GetItem(c *fiber.Ctx) error {
+	items := []models.Item{}
+
+	// Getting from redis
+	cacheVal, err := rdb.Get(ctx, "items").Result()
+
+	// If cache entry exists
+	if err == nil {
+		err := json.Unmarshal([]byte(cacheVal), &items)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+	} else if err == redis.Nil {
+		// fetching from db
+		database.DB.Db.Find(&items)
+
+		//Saving to redis
+		itemsJson, err := json.Marshal(items)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+		err = rdb.Set(ctx, "items", itemsJson, 0).Err() // 0 means no expiration
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": err.Error(),
+			})
+		}
+	} else {
+		// Redis error
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": err.Error(),
+		})
+	}
+
+	return c.Status(200).JSON(items)
 }
 
 func AddItem(c *fiber.Ctx) error {
-	// Logic to add a new item
 	item := new(models.Item)
 	if err := c.BodyParser(item); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -45,20 +123,33 @@ func AddItem(c *fiber.Ctx) error {
 	}
 	database.DB.Db.Create(&item)
 
+	// Invalidate the 'items' cache entry
+	err := rdb.Del(ctx, "items").Err()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": err.Error(),
+		})
+	}
+
 	return c.Status(200).JSON(item)
 }
 
 func DeleteItem(c *fiber.Ctx) error {
 	// Logic to delete an item
-	itemId := c.Params("ID") //?NOTE: Need to change id
-	//check if item exists in database
-	//result := database.DB.Db.Delete(&models.Item{}, "ID = ?", c.Params(itemId)) //
-
-	result := database.DB.Db.Delete(&models.Item{}, "ID = ?", itemId) //
+	itemId := c.Params("ID")
+	result := database.DB.Db.Delete(&models.Item{}, "ID = ?", itemId)
 
 	//if its not found, send status 404
 	if result.Error != nil {
 		return c.SendStatus(fiber.StatusNotFound)
+	}
+
+	// Invalidate the 'items' cache entry
+	err := rdb.Del(ctx, "items").Err()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": err.Error(),
+		})
 	}
 
 	//Assuming no errors send status 200
@@ -68,6 +159,15 @@ func DeleteItem(c *fiber.Ctx) error {
 func DeleteAll(c *fiber.Ctx) error {
 	// Logic to delete all items
 	database.DB.Db.Exec("DELETE FROM items")
+
+	// Invalidate the 'items' cache entry
+	err := rdb.Del(ctx, "items").Err()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": err.Error(),
+		})
+	}
+
 	return c.SendString("All items deleted")
 }
 

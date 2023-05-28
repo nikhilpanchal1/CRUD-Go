@@ -11,6 +11,8 @@ services:
       - .:/usr/src/app
     #command: go run cmd/main.go -b 0.0.0.0 #using air so below is needed instead. Air has hot reload :)
     command: air cmd/main.go -b 0.0.0.0
+    sysctls:
+      - net.core.somaxconn=4069 #65535 #change it to maybe 4069 or 8192 for 2core 4gb ram
     ulimits:
       nofile:
         soft: 26677
@@ -28,8 +30,20 @@ services:
       - postgres-db:/var/lib/postgresql/data/
     ulimits:
       nofile:
-        soft: 26677 #26677
-        hard: 46677 #46677
+        soft: 26677
+        hard: 46677
+
+  redis:  
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    ulimits:
+      nofile:
+        soft: 26677
+        hard: 46677
 
 volumes:
   postgres-db:
+  redis-data:
