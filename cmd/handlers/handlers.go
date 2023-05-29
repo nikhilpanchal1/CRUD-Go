@@ -46,13 +46,14 @@ func GetItemById(c *fiber.Ctx) error {
 		return c.Status(200).JSON(item)
 	} else if err == redis.Nil {
 		// Cache entry doesnt exist fetching from database
-		result := database.DB.Db.First(&models.Item{}, "ID = ?", itemId)
+		var item models.Item
+		result := database.DB.Db.First(&item, "ID = ?", itemId)
 		if result.Error != nil {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
 
 		// Saving to redis
-		itemJson, err := json.Marshal(result)
+		itemJson, err := json.Marshal(item) // Changed from 'result' to 'item'
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"message": err.Error(),
@@ -64,7 +65,7 @@ func GetItemById(c *fiber.Ctx) error {
 				"message": err.Error(),
 			})
 		}
-		return c.Status(200).JSON(result)
+		return c.Status(200).JSON(item) // Changed from 'result' to 'item'
 	} else {
 		// Redis error
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

@@ -5,6 +5,7 @@ services:
     build: .
     env_file:
       - .env
+    privileged: true
     ports:
       - "3000:3000"
     volumes:
@@ -12,6 +13,7 @@ services:
     #command: go run cmd/main.go -b 0.0.0.0 #using air so below is needed instead. Air has hot reload :)
     command: air cmd/main.go -b 0.0.0.0
     sysctls:
+      - net.ipv4.ip_local_port_range=1024 65000
       - net.core.somaxconn=4069 #65535 #change it to maybe 4069 or 8192 for 2core 4gb ram
     ulimits:
       nofile:

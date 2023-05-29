@@ -10,7 +10,7 @@ func setupRoutes(app *fiber.App) {
 	app.Get("/items", handlers.GetItem)
 	app.Post("/items", handlers.AddItem)
 	app.Delete("/items", handlers.DeleteAll)
-	//app.Get("/items/:id", handlers.GetItemById)
+	app.Get("/items/:id", handlers.GetItemById)
 	app.Delete("/items/:id", handlers.DeleteItem) ///:id
 	app.Post("/login", handlers.Login)
 	app.Get("/user", handlers.GetLoggedInUsers) //Ge all logged in users

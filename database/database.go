@@ -35,6 +35,15 @@ func ConnectDb() {
 	log.Println("Connected to db")
 	//db.Logger = logger.Default.LogMode(logger.Info)
 
+	// Adjust connection pool settings //!Note: Configure this to needs
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(2)
+	}
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(100)
+
 	// Enable UUID extension
 	err = db.Exec("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";").Error
 	if err != nil {
