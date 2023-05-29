@@ -5,6 +5,6 @@ WORKDIR /usr/src/app
 
 #hot reload
 RUN go install github.com/cosmtrek/air@latest
-
+EXPOSE 3000
 COPY . .
 RUN go mod tidy

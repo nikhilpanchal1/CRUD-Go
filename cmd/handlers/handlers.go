@@ -22,9 +22,11 @@ func Home(c *fiber.Ctx) error {
 var (
 	ctx = context.Background()
 	rdb = redis.NewClient(&redis.Options{
-		Addr:     os.Getenv("REDIS_ADDR"), // Redis server address
-		Password: "",                      // os.Getenv("DB_PASSWORD"), // redis password
-		DB:       0,                       // convert string to int: strconv.Atoi(os.Getenv("DB_NUMBER")), // database number
+		Addr:         os.Getenv("REDIS_ADDR"), // Redis server address
+		Password:     "",                      // os.Getenv("DB_PASSWORD"), // redis password
+		DB:           0,                       // convert string to int: strconv.Atoi(os.Getenv("DB_NUMBER")), // database number
+		MinIdleConns: 4,
+		PoolSize:     40,
 	})
 )
 
@@ -59,7 +61,7 @@ func GetItemById(c *fiber.Ctx) error {
 				"message": err.Error(),
 			})
 		}
-		err = rdb.Set(ctx, "item:"+itemId, itemJson, 0).Err() // 0 means no expiration
+		err = rdb.Set(ctx, "item:"+itemId, itemJson, time.Hour).Err() // Cache for 1 hour, // 0 means no expiration
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"message": err.Error(),
