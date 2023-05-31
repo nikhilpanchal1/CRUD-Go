@@ -54,20 +54,22 @@ func GetItemById(c *fiber.Ctx) error {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
 
-		// Saving to redis
-		itemJson, err := json.Marshal(item) // Changed from 'result' to 'item'
+		// Saving to redis using pipeline
+		itemJson, err := json.Marshal(item)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"message": err.Error(),
 			})
 		}
-		err = rdb.Set(ctx, "item:"+itemId, itemJson, time.Hour).Err() // Cache for 1 hour, // 0 means no expiration
+		pipe := rdb.Pipeline()
+		pipe.Set(ctx, "item:"+itemId, itemJson, time.Hour).Err()
+		_, err = pipe.Exec(ctx)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"message": err.Error(),
 			})
 		}
-		return c.Status(200).JSON(item) // Changed from 'result' to 'item'
+		return c.Status(200).JSON(item)
 	} else {
 		// Redis error
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -92,7 +94,14 @@ func GetItem(c *fiber.Ctx) error {
 		}
 	} else if err == redis.Nil {
 		// fetching from db
-		database.DB.Db.Find(&items)
+		result := database.DB.Db.Find(&items)
+
+		// handle db errors explicitly
+		if result.Error != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": result.Error.Error(),
+			})
+		}
 
 		//Saving to redis
 		itemsJson, err := json.Marshal(items)
@@ -101,7 +110,9 @@ func GetItem(c *fiber.Ctx) error {
 				"message": err.Error(),
 			})
 		}
-		err = rdb.Set(ctx, "items", itemsJson, 0).Err() // 0 means no expiration
+		pipe := rdb.Pipeline()
+		pipe.Set(ctx, "items", itemsJson, time.Minute*10).Err() // setting expiration to 10 minutes
+		_, err = pipe.Exec(ctx)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"message": err.Error(),
@@ -126,8 +137,10 @@ func AddItem(c *fiber.Ctx) error {
 	}
 	database.DB.Db.Create(&item)
 
-	// Invalidate the 'items' cache entry
-	err := rdb.Del(ctx, "items").Err()
+	// Invalidate the 'items' cache entry using pipeline
+	pipe := rdb.Pipeline()
+	pipe.Del(ctx, "items").Err()
+	_, err := pipe.Exec(ctx)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"message": err.Error(),
@@ -147,8 +160,11 @@ func DeleteItem(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 
-	// Invalidate the 'items' cache entry
-	err := rdb.Del(ctx, "items").Err()
+	// Invalidate the 'items' cache entry and individual item cache
+	pipe := rdb.Pipeline()
+	pipe.Del(ctx, "items").Err()
+	pipe.Del(ctx, "item:"+itemId).Err()
+	_, err := pipe.Exec(ctx)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"message": err.Error(),
@@ -163,8 +179,10 @@ func DeleteAll(c *fiber.Ctx) error {
 	// Logic to delete all items
 	database.DB.Db.Exec("DELETE FROM items")
 
-	// Invalidate the 'items' cache entry
-	err := rdb.Del(ctx, "items").Err()
+	// Invalidate the 'items' cache entry using pipeline
+	pipe := rdb.Pipeline()
+	pipe.Del(ctx, "items").Err()
+	_, err := pipe.Exec(ctx)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"message": err.Error(),
